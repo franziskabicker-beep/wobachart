@@ -1,0 +1,336 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>WoBa Chart — Women's Basketball Relationship Chart</title>
+<meta name="description" content="An interactive chart of reported relationships and connections in women's basketball.">
+<style>
+  *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+  html, body { height: 100%; background: #0f0f12; font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif; }
+  body { display: flex; flex-direction: column; min-height: 100vh; }
+
+  #top-bar {
+    display: flex; align-items: center; gap: 8px; flex-wrap: wrap;
+    padding: 12px 18px; background: rgba(15,15,18,0.98);
+    border-bottom: 0.5px solid rgba(255,255,255,0.08); position: sticky; top: 0; z-index: 10;
+  }
+  #top-bar h1 { font-size: 14px; font-weight: 500; color: #e8e6df; letter-spacing: 0.05em; flex-shrink: 0; }
+  #search-input {
+    flex: 1; min-width: 120px; max-width: 200px; background: rgba(255,255,255,0.07);
+    border: 0.5px solid rgba(255,255,255,0.15); border-radius: 6px;
+    padding: 5px 10px; color: #e8e6df; font-size: 12px; outline: none;
+  }
+  #search-input::placeholder { color: rgba(255,255,255,0.28); }
+  #search-input:focus { border-color: rgba(255,255,255,0.35); }
+  .filter-btn {
+    background: rgba(255,255,255,0.07); border: 0.5px solid rgba(255,255,255,0.14);
+    border-radius: 20px; padding: 4px 12px; color: rgba(255,255,255,0.5);
+    font-size: 11px; cursor: pointer; transition: all 0.15s; white-space: nowrap;
+  }
+  .filter-btn:hover { background: rgba(255,255,255,0.12); color: #e8e6df; }
+  .filter-btn.active { background: rgba(255,255,255,0.18); color: #e8e6df; border-color: rgba(255,255,255,0.32); }
+  #contact-btn {
+    margin-left: auto; background: rgba(255,255,255,0.07); border: 0.5px solid rgba(255,255,255,0.18);
+    border-radius: 6px; padding: 5px 13px; color: rgba(255,255,255,0.45); font-size: 11px;
+    cursor: pointer; transition: all 0.15s; flex-shrink: 0;
+  }
+  #contact-btn:hover { color: #e8e6df; background: rgba(255,255,255,0.12); }
+
+  #graph-wrap { flex: 1; position: relative; }
+  svg#graph { width: 100%; height: calc(100vh - 48px); display: block; }
+
+  #legend {
+    position: fixed; bottom: 14px; left: 18px; z-index: 10;
+    display: flex; gap: 14px; align-items: center; flex-wrap: wrap;
+    pointer-events: none;
+  }
+  .legend-item { display: flex; align-items: center; gap: 5px; font-size: 11px; color: rgba(255,255,255,0.38); }
+  .legend-dot { width: 8px; height: 8px; border-radius: 50%; flex-shrink: 0; }
+  .legend-line { width: 18px; height: 2px; border-radius: 1px; flex-shrink: 0; }
+
+  #stats { position: fixed; bottom: 14px; right: 18px; font-size: 11px; color: rgba(255,255,255,0.22); z-index: 10; pointer-events: none; }
+
+  #tooltip {
+    position: fixed; background: rgba(18,18,24,0.97); border: 0.5px solid rgba(255,255,255,0.14);
+    border-radius: 8px; padding: 10px 14px; font-size: 12px; color: #e8e6df;
+    pointer-events: none; z-index: 20; max-width: 220px; display: none;
+    box-shadow: 0 4px 20px rgba(0,0,0,0.6); line-height: 1.5;
+  }
+  #tooltip .tip-name { font-size: 13px; font-weight: 500; margin-bottom: 3px; }
+  #tooltip .tip-meta { color: rgba(255,255,255,0.42); font-size: 11px; }
+  #tooltip .tip-conn { margin-top: 7px; color: rgba(255,255,255,0.55); font-size: 11px; }
+
+  /* Modal */
+  #modal-overlay {
+    display: none; position: fixed; inset: 0; background: rgba(0,0,0,0.72);
+    z-index: 30; align-items: center; justify-content: center;
+  }
+  #modal-overlay.show { display: flex; }
+  #modal {
+    background: #1b1b23; border: 0.5px solid rgba(255,255,255,0.14); border-radius: 12px;
+    padding: 26px; max-width: 400px; width: 90%; color: #e8e6df;
+  }
+  #modal h2 { font-size: 15px; font-weight: 500; margin-bottom: 6px; }
+  #modal p { font-size: 12px; color: rgba(255,255,255,0.48); margin-bottom: 18px; line-height: 1.6; }
+  #modal input, #modal textarea {
+    width: 100%; background: rgba(255,255,255,0.07); border: 0.5px solid rgba(255,255,255,0.18);
+    border-radius: 6px; padding: 8px 12px; color: #e8e6df; font-size: 12px; outline: none;
+    margin-bottom: 9px; font-family: inherit; display: block;
+  }
+  #modal textarea { resize: vertical; min-height: 90px; }
+  #modal input:focus, #modal textarea:focus { border-color: rgba(255,255,255,0.38); }
+  .modal-footer { display: flex; gap: 10px; justify-content: flex-end; margin-top: 4px; }
+  .modal-btn { padding: 7px 16px; border-radius: 6px; font-size: 12px; cursor: pointer; border: 0.5px solid rgba(255,255,255,0.18); }
+  .modal-btn.cancel { background: transparent; color: rgba(255,255,255,0.42); }
+  .modal-btn.cancel:hover { color: #e8e6df; }
+  .modal-btn.send { background: rgba(255,255,255,0.13); color: #e8e6df; }
+  .modal-btn.send:hover { background: rgba(255,255,255,0.2); }
+
+  /* Disclaimer */
+  #disclaimer {
+    background: rgba(255,204,85,0.08); border-top: 0.5px solid rgba(255,204,85,0.2);
+    padding: 8px 18px; font-size: 11px; color: rgba(255,255,255,0.35); text-align: center;
+  }
+</style>
+</head>
+<body>
+
+<div id="top-bar">
+  <h1>WoBa Chart</h1>
+  <input id="search-input" type="text" placeholder="Search players…" oninput="filterSearch(this.value)">
+  <button class="filter-btn active" onclick="setFilter('all',this)">All</button>
+  <button class="filter-btn" onclick="setFilter('relationship',this)">Relationship</button>
+  <button class="filter-btn" onclick="setFilter('past',this)">Past</button>
+  <button class="filter-btn" onclick="setFilter('rumor',this)">Rumor</button>
+  <button id="contact-btn" onclick="openModal()">Suggest edit</button>
+</div>
+
+<div id="graph-wrap">
+  <svg id="graph"></svg>
+</div>
+
+<div id="disclaimer">
+  All information is based on publicly reported sources. For corrections or additions, use "Suggest edit".
+</div>
+
+<div id="legend">
+  <div class="legend-item"><div class="legend-line" style="background:#d97aff"></div>Relationship</div>
+  <div class="legend-item"><div class="legend-line" style="background:#888;border-top:1px dashed #888;height:0"></div>Past</div>
+  <div class="legend-item"><div class="legend-line" style="background:#ffcc55;opacity:0.65"></div>Rumor</div>
+  <div class="legend-item" style="margin-left:6px"><div class="legend-dot" style="background:#7ab8f5"></div>WNBA</div>
+  <div class="legend-item"><div class="legend-dot" style="background:#88c88a"></div>Other sport</div>
+  <div class="legend-item"><div class="legend-dot" style="background:#b0ae9e"></div>Civilian</div>
+</div>
+
+<div id="stats"></div>
+<div id="tooltip"></div>
+
+<div id="modal-overlay">
+  <div id="modal">
+    <h2>Suggest an edit</h2>
+    <p>Know something that's missing or incorrect? Your message will be sent directly to the site maintainer for review.</p>
+    <input type="text" id="modal-name" placeholder="Your name (optional)">
+    <input type="email" id="modal-email" placeholder="Your email (optional, for follow-up)">
+    <textarea id="modal-msg" placeholder="What should be added, removed, or corrected?"></textarea>
+    <div class="modal-footer">
+      <button class="modal-btn cancel" onclick="closeModal()">Cancel</button>
+      <button class="modal-btn send" onclick="submitModal()">Send suggestion</button>
+    </div>
+  </div>
+</div>
+
+<script src="https://cdnjs.cloudflare.com/ajax/libs/d3/7.8.5/d3.min.js"></script>
+<script>
+// ─── CONFIG ───────────────────────────────────────────────
+// Replace with your real email address before publishing
+const OWNER_EMAIL = "wobachart@gmail.com";
+
+// ─── DATA ─────────────────────────────────────────────────
+// To add a person: { id: "Full Name", sport: "WNBA", team: "Team Name" }
+// To add a connection: { source: "Name A", target: "Name B", type: "relationship|past|rumor", label: "Short description" }
+
+const rawNodes = [
+  { id: "Brittney Griner",         sport: "WNBA",            team: "Phoenix Mercury" },
+  { id: "Cherelle Griner",         sport: "Civilian",        team: "" },
+  { id: "Diana Taurasi",           sport: "WNBA",            team: "Phoenix Mercury" },
+  { id: "Penny Taylor",            sport: "WNBA (retired)",  team: "" },
+  { id: "Elena Delle Donne",       sport: "WNBA",            team: "Washington Mystics" },
+  { id: "Amanda Clifton",          sport: "Civilian",        team: "" },
+  { id: "Breanna Stewart",         sport: "WNBA",            team: "New York Liberty" },
+  { id: "Marta Xargay",            sport: "EuroLeague",      team: "" },
+  { id: "Candace Parker",          sport: "WNBA",            team: "Las Vegas Aces" },
+  { id: "Anna Petrakova",          sport: "Civilian",        team: "" },
+  { id: "A'ja Wilson",             sport: "WNBA",            team: "Las Vegas Aces" },
+  { id: "Jordin Canada",           sport: "WNBA",            team: "Seattle Storm" },
+  { id: "Aerial Powers",           sport: "WNBA",            team: "Dallas Wings" },
+  { id: "Kelsey Plum",             sport: "WNBA",            team: "Las Vegas Aces" },
+  { id: "Kahleah Copper",          sport: "WNBA",            team: "Phoenix Mercury" },
+  { id: "Courtney Williams",       sport: "WNBA",            team: "Atlanta Dream" },
+  { id: "Natasha Cloud",           sport: "WNBA",            team: "Connecticut Sun" },
+  { id: "Layshia Clarendon",       sport: "WNBA",            team: "" },
+  { id: "Maya Moore",              sport: "WNBA (retired)",  team: "" },
+  { id: "Sue Bird",                sport: "WNBA (retired)",  team: "" },
+  { id: "Megan Rapinoe",           sport: "Soccer (retired)",team: "" },
+  { id: "DeWanna Bonner",          sport: "WNBA",            team: "Connecticut Sun" },
+  { id: "Jasmine Thomas",          sport: "WNBA",            team: "Connecticut Sun" },
+  { id: "Skylar Diggins-Smith",    sport: "WNBA",            team: "Seattle Storm" },
+  { id: "Alyssa Thomas",           sport: "WNBA",            team: "Connecticut Sun" },
+  { id: "Kaleena Mosqueda-Lewis",  sport: "WNBA",            team: "" },
+];
+
+const rawLinks = [
+  { source: "Brittney Griner",    target: "Cherelle Griner",        type: "relationship", label: "Married 2019" },
+  { source: "Diana Taurasi",      target: "Penny Taylor",           type: "relationship", label: "Married 2017" },
+  { source: "Elena Delle Donne",  target: "Amanda Clifton",         type: "relationship", label: "Married 2017" },
+  { source: "Breanna Stewart",    target: "Marta Xargay",           type: "past",         label: "Together ~2016–2019" },
+  { source: "Candace Parker",     target: "Anna Petrakova",         type: "relationship", label: "Married 2023" },
+  { source: "Courtney Williams",  target: "Aerial Powers",          type: "rumor",        label: "Rumored" },
+  { source: "Natasha Cloud",      target: "Layshia Clarendon",      type: "past",         label: "Reported relationship" },
+  { source: "Sue Bird",           target: "Megan Rapinoe",          type: "relationship", label: "Married 2023" },
+  { source: "DeWanna Bonner",     target: "Jasmine Thomas",         type: "relationship", label: "Married 2020" },
+  { source: "Alyssa Thomas",      target: "Kaleena Mosqueda-Lewis", type: "relationship", label: "Engaged 2023" },
+  { source: "A'ja Wilson",        target: "Jordin Canada",          type: "rumor",        label: "Rumored" },
+  { source: "Kahleah Copper",     target: "Courtney Williams",      type: "rumor",        label: "Rumored" },
+];
+
+// ─── GRAPH ────────────────────────────────────────────────
+let activeFilter = "all", searchTerm = "";
+
+function linkColor(t) { return t==="relationship"?"#d97aff":t==="rumor"?"#ffcc55":"#777"; }
+function linkOpacity(t) { return t==="relationship"?.85:t==="rumor"?.55:.42; }
+function nodeColor(d) {
+  if (d.sport.startsWith("WNBA")) return "#7ab8f5";
+  if (d.sport==="Civilian") return "#b0ae9e";
+  return "#88c88a";
+}
+
+const svgEl = document.getElementById("graph");
+const W = () => svgEl.clientWidth || window.innerWidth;
+const H = () => svgEl.clientHeight || window.innerHeight - 80;
+
+const svg = d3.select("#graph");
+const gLinks = svg.append("g");
+const gNodes = svg.append("g");
+const tooltip = document.getElementById("tooltip");
+let sim;
+
+function getVisible() {
+  let links = rawLinks;
+  if (activeFilter !== "all") links = links.filter(l => l.type === activeFilter);
+  if (searchTerm) {
+    const s = searchTerm.toLowerCase();
+    const matchIds = new Set(rawNodes.filter(n => n.id.toLowerCase().includes(s)).map(n => n.id));
+    links = links.filter(l => matchIds.has(l.source)||matchIds.has(l.target));
+    const linked = new Set(); links.forEach(l => { linked.add(l.source); linked.add(l.target); });
+    return { nodes: rawNodes.filter(n => matchIds.has(n.id)||linked.has(n.id)), links };
+  }
+  const linked = new Set(); links.forEach(l => { linked.add(l.source); linked.add(l.target); });
+  return { nodes: rawNodes.filter(n => linked.has(n.id)), links };
+}
+
+function render() {
+  const w = W(), h = H();
+  const { nodes, links } = getVisible();
+  const nMap = {}; nodes.forEach(n => nMap[n.id] = true);
+  const vLinks = links.filter(l => nMap[l.source]&&nMap[l.target]).map(l=>({...l}));
+  const vNodes = nodes.map(n=>({...n}));
+
+  const degree = {};
+  vLinks.forEach(l => {
+    degree[l.source]=(degree[l.source]||0)+1;
+    degree[l.target]=(degree[l.target]||0)+1;
+  });
+
+  if (sim) sim.stop();
+  sim = d3.forceSimulation(vNodes)
+    .force("link", d3.forceLink(vLinks).id(d=>d.id).distance(120))
+    .force("charge", d3.forceManyBody().strength(-300))
+    .force("center", d3.forceCenter(w/2, h/2))
+    .force("collide", d3.forceCollide(d => 40 + (degree[d.id]||0)*2));
+
+  gLinks.selectAll("*").remove();
+  gNodes.selectAll("*").remove();
+
+  gLinks.selectAll("line").data(vLinks).join("line")
+    .attr("stroke", d=>linkColor(d.type))
+    .attr("stroke-opacity", d=>linkOpacity(d.type))
+    .attr("stroke-width", d=>d.type==="relationship"?2:1.4)
+    .attr("stroke-dasharray", d=>d.type==="past"?"6 4":null);
+
+  const R = d => 7 + (degree[d.id]||0)*1.8;
+
+  const node = gNodes.selectAll("g").data(vNodes).join("g")
+    .attr("cursor","pointer")
+    .call(d3.drag()
+      .on("start",(e,d)=>{ if(!e.active) sim.alphaTarget(0.3).restart(); d.fx=d.x; d.fy=d.y; })
+      .on("drag",(e,d)=>{ d.fx=e.x; d.fy=e.y; })
+      .on("end",(e,d)=>{ if(!e.active) sim.alphaTarget(0); d.fx=null; d.fy=null; })
+    )
+    .on("mouseover",(e,d)=>{
+      const conns = vLinks.filter(l=>(l.source.id||l.source)===d.id||(l.target.id||l.target)===d.id);
+      const lines = conns.map(l=>{
+        const other=(l.source.id||l.source)===d.id?(l.target.id||l.target):(l.source.id||l.source);
+        return `<span style="color:${linkColor(l.type)}">${other}</span> <span style="opacity:0.4;font-size:10px">${l.label}</span>`;
+      }).join("<br>");
+      tooltip.innerHTML = `<div class="tip-name">${d.id}</div><div class="tip-meta">${d.sport}${d.team?" · "+d.team:""}</div>${conns.length?`<div class="tip-conn">${lines}</div>`:""}`;
+      tooltip.style.display = "block";
+    })
+    .on("mousemove",e=>{
+      let x=e.clientX+16, y=e.clientY-10;
+      if (x+225>window.innerWidth) x=e.clientX-225;
+      tooltip.style.left=x+"px"; tooltip.style.top=y+"px";
+    })
+    .on("mouseout",()=>{ tooltip.style.display="none"; });
+
+  node.append("circle")
+    .attr("r", R)
+    .attr("fill", d=>nodeColor(d))
+    .attr("stroke","rgba(255,255,255,0.1)")
+    .attr("stroke-width",1);
+
+  node.append("text")
+    .text(d => d.id)
+    .attr("text-anchor","middle")
+    .attr("dy", d => R(d)+13)
+    .attr("font-size","11px")
+    .attr("fill","rgba(255,255,255,0.58)")
+    .attr("pointer-events","none");
+
+  sim.on("tick",()=>{
+    gLinks.selectAll("line")
+      .attr("x1",d=>d.source.x).attr("y1",d=>d.source.y)
+      .attr("x2",d=>d.target.x).attr("y2",d=>d.target.y);
+    gNodes.selectAll("g")
+      .attr("transform",d=>`translate(${Math.max(20,Math.min(w-20,d.x))},${Math.max(20,Math.min(h-20,d.y))})`);
+  });
+
+  document.getElementById("stats").textContent = `${vNodes.length} people · ${vLinks.length} connections`;
+}
+
+function setFilter(t,btn) {
+  activeFilter=t;
+  document.querySelectorAll(".filter-btn").forEach(b=>b.classList.remove("active"));
+  btn.classList.add("active");
+  render();
+}
+function filterSearch(v) { searchTerm=v.trim(); render(); }
+function openModal() { document.getElementById("modal-overlay").classList.add("show"); }
+function closeModal() { document.getElementById("modal-overlay").classList.remove("show"); }
+function submitModal() {
+  const name=document.getElementById("modal-name").value.trim();
+  const email=document.getElementById("modal-email").value.trim();
+  const msg=document.getElementById("modal-msg").value.trim();
+  if(!msg){ document.getElementById("modal-msg").focus(); return; }
+  const sub=encodeURIComponent("WoBa Chart suggestion");
+  const body=encodeURIComponent(`From: ${name||"Anonymous"}\nEmail: ${email||"not provided"}\n\nSuggestion:\n${msg}`);
+  window.open(`mailto:${OWNER_EMAIL}?subject=${sub}&body=${body}`);
+  closeModal();
+  ["modal-name","modal-email","modal-msg"].forEach(id=>document.getElementById(id).value="");
+}
+
+window.addEventListener("resize", render);
+render();
+</script>
+</body>
+</html>
